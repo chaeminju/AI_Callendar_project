@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>📅 AI 일정 도우미</title>
+  <link href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/index.global.min.css" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/index.global.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body class="bg-gray-100">
+    {% include "includes/header.html" %}
+  
+
+  <main class="max-w-7xl mx-auto px-4 py-6">
+    <!-- 캘린더 섹션 -->
+    <section class="bg-white rounded-xl shadow p-6 mb-6">
+      <h2 class="text-xl font-bold mb-4">📅 내 일정 캘린더</h2>
+      <div id="calendar" class="w-full"></div>
+    </section>
+
+    <!-- 오늘의 일정 요약 섹션 -->
+    <section class="bg-white rounded-xl shadow p-6">
+      <h2 class="text-xl font-bold mb-4">📌 오늘의 일정</h2>
+      <div id="today-schedules-container">
+        <!-- 오늘의 일정이 여기에 동적으로 로드됩니다 -->
+        <div class="flex justify-center py-5">
+          <div class="animate-spin rounded-full h-10 w-10 border-b-2 border-indigo-600"></div>
+        </div>
+      </div>
+    </section>
+  </main>
+  
+  <!-- 일정 상세 모달 (dashboard.html과 동일) -->
+  <div id="detailModal" class="fixed inset-0 bg-black bg-opacity-50 hidden flex justify-center items-center z-30">
+    <div class="bg-white rounded-xl shadow p-6 w-96">
+      <h3 class="text-lg font-semibold mb-4">📋 일정 상세</h3>
+      <div class="space-y-2 mb-4 text-sm text-gray-700">
+        <p><strong>제목:</strong> <span id="detailTitle"></span></p>
+        <p><strong>시간:</strong> <span id="detailTime"></span></p>
+        <p><strong>설명:</strong> <span id="detailDesc"></span></p>
+        <p><strong>우선순위:</strong> <span id="detailPriority"></span></p>
+        <p><strong>완료 여부:</strong> <span id="detailCompleted"></span></p>
+      </div>
+      <div class="flex justify-end gap-2">
+        <button id="completeBtn" class="px-3 py-1 bg-green-500 text-white rounded hover:bg-green-600">완료</button>
+        <button id="deleteBtn" class="px-3 py-1 bg-red-500 text-white rounded hover:bg-red-600">삭제</button>
+        <button id="closeDetailBtn" class="px-3 py-1 bg-gray-300 rounded hover:bg-gray-400">닫기</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="/static/js/main.js"></script>
+   <script src="/static/js/common.js"></script>
+  <script>
+    // 인증 확인
+    document.addEventListener('DOMContentLoaded', function() {
+      if (!getToken()) {
+        window.location.href = '/login';
+        return;
+      }
+      
+      // 캘린더 초기화
+      initCalendar();
+      
+      // 오늘의 일정 로드
+      loadTodaySchedules();
+      
+      // 로그아웃 링크 이벤트
+      document.getElementById('logout-link').addEventListener('click', function(e) {
+        e.preventDefault();
+        localStorage.removeItem('token');
+        window.location.href = '/login';
+      });
+      
+      // 모달 닫기 버튼
+      document.getElementById('closeDetailBtn').addEventListener('click', function() {
+        document.getElementById('detailModal').classList.add('hidden');
+      });
+      
+      // 일정 삭제 버튼
+      document.getElementById('deleteBtn').addEventListener('click', function() {
+        const scheduleId = this.dataset.id;
+        if (confirm('정말 이 일정을 삭제하시겠습니까?')) {
+          deleteSchedule(scheduleId);
+        }
+      });
+      
+      // 일정 완료 버튼
+      document.getElementById('completeBtn').addEventListener('click', function() {
+        const scheduleId = this.dataset.id;
+        toggleScheduleComplete(scheduleId, true);
+      });
+    });
+    
+    // 캘린더 초기화 함수 (dashboard.html과 동일)
+    function initCalendar() {
+      const calendarEl = document.getElementById('calendar');
+      const calendar = new FullCalendar.Calendar(calendarEl, {
+        initialView: 'dayGridMonth',
+        headerToolbar: {
+          left: 'prev,next today',
+          center: 'title',
+          right: 'dayGridMonth,timeGridWeek,timeGridDay'
+        },
+        locale: 'ko',
+        height: 500,
+        events: function(fetchInfo, successCallback, failureCallback) {
+          // 서버에서 일정 데이터 가져오기
+          fetchAPI('/api/schedules')
+            .then(schedules => {
+              const events = schedules.map(schedule => {
+                return {
+                  id: schedule.id,
+                  title: schedule.title,
+                  start: schedule.start_time,
+                  end: schedule.end_time,
+                  description: schedule.description,
+                  priority: schedule.priority,
+                  is_completed: schedule.is_completed,
+                  color: getPriorityColor(schedule.priority),
+                  textColor: schedule.is_completed ? '#888888' : '#000000',
+                  className: schedule.is_completed ? 'line-through' : ''
+                };
+              });
+              successCallback(events);
+            })
+            .catch(error => {
+              console.error('일정 로드 오류:', error);
+              failureCallback(error);
+            });
+        },
+        eventClick: function(info) {
+          // 일정 상세 보기 (dashboard.html과 동일)
+          document.getElementById('detailTitle').textContent = info.event.title;
+          document.getElementById('detailTime').textContent = new Date(info.event.start).toLocaleString('ko-KR') + 
+                                                            ' - ' + 
+                                                            new Date(info.event.end).toLocaleString('ko-KR');
+          document.getElementById('detailDesc').textContent = info.event.extendedProps.description || '(없음)';
+          document.getElementById('detailPriority').textContent = info.event.extendedProps.priority;
+          document.getElementById('detailCompleted').textContent = info.event.extendedProps.is_completed ? '완료' : '미완료';
+          
+          // 수정 및 삭제 버튼에 이벤트 ID 설정
+          document.getElementById('completeBtn').dataset.id = info.event.id;
+          document.getElementById('deleteBtn').dataset.id = info.event.id;
+          
+          // 완료 상태에 따라 완료 버튼 표시 여부
+          document.getElementById('completeBtn').style.display = info.event.extendedProps.is_completed ? 'none' : 'block';
+          
+          // 모달 표시
+          document.getElementById('detailModal').classList.remove('hidden');
+        },
+        dateClick: function(info) {
+          // 날짜 클릭 시 대시보드로 이동하여 일정 추가 폼에 날짜 설정
+          const clickedDate = new Date(info.date);
+          const formattedDate = clickedDate.toISOString().slice(0, 16);
+          
+          // 클릭한 날짜를 localStorage에 저장
+          localStorage.setItem('selectedDate', formattedDate);
+          
+          // 대시보드 페이지로 이동
+          window.location.href = '/dashboard';
+        }
+      });
+      calendar.render();
+      
+      // 전역 변수로 캘린더 저장
+      window.calendar = calendar;
+    }
+    
+    // 우선순위에 따른 색상 반환 함수 (dashboard.html과 동일)
+    function getPriorityColor(priority) {
+      const colors = {
+        1: '#CCCCCC',  // 회색
+        2: '#63B3ED',  // 파란색
+        3: '#7F9CF5',  // 인디고
+        4: '#F6E05E',  // 노란색
+        5: '#F56565'   // 빨간색
+      };
+      return colors[priority] || '#7F9CF5';
+    }
+    
+    // 우선순위 배지 반환 함수 (dashboard.html과 동일)
+    function getPriorityBadge(priority) {
+      const colors = {
+        1: 'bg-gray-200 text-gray-700',
+        2: 'bg-blue-100 text-blue-700',
+        3: 'bg-indigo-100 text-indigo-700',
+        4: 'bg-yellow-100 text-yellow-700',
+        5: 'bg-red-100 text-red-700'
+      };
+      
+      return `<span class="ml-2 text-xs px-2 py-0.5 rounded-full ${colors[priority]}">P${priority}</span>`;
+    }
+    
+    // 오늘의 일정 로드 함수 (새로 추가된 함수)
+    async function loadTodaySchedules() {
+      try {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const tomorrow = new Date(today);
+        tomorrow.setDate(tomorrow.getDate() + 1);
+        
+        const schedules = await fetchAPI('/api/schedules');
+        const todaySchedules = schedules.filter(schedule => {
+          const scheduleDate = new Date(schedule.start_time);
+          return scheduleDate >= today && scheduleDate < tomorrow;
+        });
+        
+        const container = document.getElementById('today-schedules-container');
+        
+        if (todaySchedules.length === 0) {
+          container.innerHTML = '<div class="text-center py-3">오늘 예정된 일정이 없습니다.</div>';
+          return;
+        }
+        
+        // 시간순으로 정렬
+        todaySchedules.sort((a, b) => new Date(a.start_time) - new Date(b.start_time));
+        
+        let html = '<div class="space-y-2 max-h-[300px] overflow-y-auto pr-2">';
+        
+        todaySchedules.forEach(schedule => {
+          const startTime = new Date(schedule.start_time).toLocaleTimeString('ko-KR', {hour: '2-digit', minute: '2-digit'});
+          const endTime = new Date(schedule.end_time).toLocaleTimeString('ko-KR', {hour: '2-digit', minute: '2-digit'});
+          const priorityBadge = getPriorityBadge(schedule.priority);
+          const completedClass = schedule.is_completed ? 'line-through' : '';
+          const bgColor = schedule.is_completed ? 'bg-gray-50' : '';
+          
+          html += `
+            <div class="border rounded-lg p-4 flex justify-between items-start hover:bg-gray-50 ${bgColor}">
+              <div>
+                <h5 class="font-semibold ${completedClass}">${schedule.title} ${priorityBadge}</h5>
+                <p class="text-sm text-gray-600">${startTime} - ${endTime}</p>
+                <p class="text-sm text-gray-500">${schedule.description || ''}</p>
+              </div>
+              <div class="flex">
+                <div class="mr-3">
+                  <input class="mr-1" type="checkbox" 
+                    ${schedule.is_completed ? 'checked' : ''} 
+                    onchange="toggleScheduleComplete(${schedule.id}, this.checked)">
+                  <label class="text-sm">완료</label>
+                </div>
+                <button class="text-sm bg-red-100 text-red-600 px-2 py-1 rounded hover:bg-red-200" 
+                  onclick="deleteSchedule(${schedule.id})">삭제</button>
+              </div>
+            </div>
+          `;
+        });
+        
+        html += '</div>';
+        container.innerHTML = html;
+      } catch (error) {
+        console.error('오늘의 일정 로드 오류:', error);
+        document.getElementById('today-schedules-container').innerHTML = 
+          '<div class="bg-red-100 text-red-700 p-4 rounded">일정을 불러오는 중 오류가 발생했습니다.</div>';
+      }
+    }
+    
+    // 일정 완료 상태 토글 함수 (dashboard.html과 동일)
+    async function toggleScheduleComplete(id, isCompleted) {
+      try {
+        await fetchAPI(`/api/schedules/${id}`, 'PUT', {
+          is_completed: isCompleted
+        });
+        
+        // 오늘의 일정 다시 로드
+        loadTodaySchedules();
+        
+        // 캘린더 새로고침
+        window.calendar.refetchEvents();
+        
+        // 모달이 열려있으면 닫기
+        document.getElementById('detailModal').classList.add('hidden');
+      } catch (error) {
+        alert(error.message || '일정 상태 변경 중 오류가 발생했습니다.');
+      }
+    }
+    
+    // 일정 삭제 함수 (dashboard.html과 동일)
+    async function deleteSchedule(id) {
+      if (!confirm('정말 이 일정을 삭제하시겠습니까?')) {
+        return;
+      }
+      
+      try {
+        await fetchAPI(`/api/schedules/${id}`, 'DELETE');
+        
+        // 오늘의 일정 다시 로드
+        loadTodaySchedules();
+        
+        // 캘린더 새로고침
+        window.calendar.refetchEvents();
+        
+        // 모달이 열려있으면 닫기
+        document.getElementById('detailModal').classList.add('hidden');
+      } catch (error) {
+        alert(error.message || '일정 삭제 중 오류가 발생했습니다.');
+      }
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>장기 목표 - Schedule AI</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+    <style>
+        .plan-section {
+            white-space: pre-line;
+        }
+        
+        .btn-generate {
+            transition: all 0.3s ease;
+        }
+        
+        .btn-generate:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+    </style>
+</head>
+<body class="bg-gray-100">
+    {% include "includes/header.html" %}
+    
+
+    <main class="max-w-7xl mx-auto px-4 py-6 flex justify-center">
+        <!-- AI 장기 계획 섹션만 중앙에 배치 -->
+        <div class="w-full max-w-2xl">
+            <div class="bg-white rounded-xl shadow p-6">
+                <div class="flex justify-between items-center mb-4">
+                    <h2 class="text-xl font-bold">🧠 AI 생성 장기 계획</h2>
+                    <button id="generate-plan-button" 
+                            class="btn-generate bg-gradient-to-r from-green-500 to-green-600 text-white font-medium px-4 py-2 rounded-lg hover:from-green-600 hover:to-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2">
+                        AI 계획 생성
+                    </button>
+                </div>
+                <!-- 계획 로딩 상태 -->
+                <div id="plan-loading" class="hidden py-8 text-center">
+                    <div class="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-green-600"></div>
+                    <p class="mt-4 text-gray-600">AI가 맞춤형 장기 계획을 생성하고 있습니다...</p>
+                </div>
+                <!-- 계획 내용 -->
+                <div id="plan-content" class="plan-section bg-gray-50 rounded-lg p-5 min-h-[200px]">
+                    <p class="text-gray-500 text-center italic">
+                        아직 생성된 계획이 없습니다. "AI 계획 생성" 버튼을 클릭하여 시작하세요.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/ko.js"></script>
+    <script src="/static/js/main.js"></script>
+    <script src="/static/js/common.js"></script>
+    <script>
+        // 인증 확인
+        document.addEventListener('DOMContentLoaded', function() {
+            // 인증 확인
+            if (!getToken()) {
+                window.location.href = '/login';
+                return;
+            }
+            
+            // 계획 생성 버튼 이벤트
+            document.getElementById('generate-plan-button').addEventListener('click', generatePlan);
+            
+            // 로그아웃 링크 이벤트
+            document.getElementById('logout-link').addEventListener('click', function(e) {
+                e.preventDefault();
+                localStorage.removeItem('token');
+                window.location.href = '/login';
+            });
+        });
+        
+        // AI 계획 생성 함수
+        async function generatePlan() {
+            try {
+        // 로딩 상태 표시
+        document.getElementById('generate-plan-button').disabled = true;
+        document.getElementById('plan-content').classList.add('hidden');
+        document.getElementById('plan-loading').classList.remove('hidden');
+        
+        // 이 부분에서 목표 대신 일정을 기반으로 계획 생성 API 호출
+        // 새로운 API 엔드포인트가 필요합니다: /api/schedules/generate-plan
+        console.log('AI 계획 생성 요청 - 일정 기반');
+        const generatedPlan = await fetchAPI('/api/schedules/generate-plan', 'POST');
+        console.log('AI 계획 생성 완료:', generatedPlan);
+        
+        // 상태 표시 업데이트
+        document.getElementById('generate-plan-button').disabled = false;
+        document.getElementById('plan-loading').classList.add('hidden');
+        document.getElementById('plan-content').classList.remove('hidden');
+        
+        // 생성된 계획 표시
+        document.getElementById('plan-content').innerHTML = 
+            `<div class="whitespace-pre-line">${generatedPlan.plan}</div>`;
+        document.getElementById('generate-plan-button').textContent = 'AI 계획 재생성';
+        
+    } catch (error) {
+                console.error('AI 계획 생성 오류:', error);
+                
+                // 상태 표시 업데이트
+                document.getElementById('generate-plan-button').disabled = false;
+                document.getElementById('plan-loading').classList.add('hidden');
+                document.getElementById('plan-content').classList.remove('hidden');
+                
+                // 오류 메시지 표시 - 사용자 친화적으로 표시
+                document.getElementById('plan-content').innerHTML = `
+                    <div class="bg-red-50 text-red-700 p-4 rounded-lg">
+                        ${error.message || '계획 생성 중 오류가 발생했습니다. 나중에 다시 시도해주세요.'}
+                    </div>
+                `;
+            }
+        }
+    </script>
+</body>
+</html>

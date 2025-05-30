@@ -1,0 +1,479 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>📅 AI 일정 도우미 대시보드</title>
+  <link href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/index.global.min.css" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/index.global.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+</head>
+<body class="bg-gray-100">
+    {% include "includes/header.html" %}
+  
+
+  <main class="max-w-7xl mx-auto px-4 py-6">
+    <!-- 캘린더 섹션 -->
+    <section class="bg-white rounded-xl shadow p-6 mb-6">
+      <h2 class="text-xl font-bold mb-4">📅 내 일정 캘린더</h2>
+      <div id="calendar" class="w-full"></div>
+    </section>
+
+    <!-- 일정 관리 섹션 -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+      <!-- 왼쪽 사이드바 - 일정 등록 -->
+      <section class="bg-white rounded-xl shadow p-6">
+        <h2 class="text-xl font-bold mb-4">📝 일정 등록</h2>
+        <form id="schedule-form" class="space-y-4">
+          <div>
+            <label for="schedule-title" class="block text-sm text-gray-600 font-medium mb-1">제목</label>
+            <input type="text" class="w-full border p-2 rounded" id="schedule-title" required>
+          </div>
+          <div>
+            <label for="schedule-description" class="block text-sm text-gray-600 font-medium mb-1">설명</label>
+            <textarea class="w-full border p-2 rounded" id="schedule-description" rows="2"></textarea>
+          </div>
+          <div>
+            <label for="schedule-start-time" class="block text-sm text-gray-600 font-medium mb-1">시작 시간</label>
+            <input type="datetime-local" class="w-full border p-2 rounded" id="schedule-start-time" required>
+          </div>
+          <div>
+            <label for="schedule-end-time" class="block text-sm text-gray-600 font-medium mb-1">종료 시간</label>
+            <input type="datetime-local" class="w-full border p-2 rounded" id="schedule-end-time" required>
+          </div>
+          <div>
+            <label for="schedule-priority" class="block text-sm text-gray-600 font-medium mb-1">우선순위 (1-5)</label>
+            <select class="w-full border p-2 rounded" id="schedule-priority">
+              <option value="1">1 (낮음)</option>
+              <option value="2">2</option>
+              <option value="3" selected>3 (보통)</option>
+              <option value="4">4</option>
+              <option value="5">5 (높음)</option>
+            </select>
+          </div>
+          <button type="button" id="save-schedule-button" class="w-full bg-indigo-600 text-white py-2 rounded hover:bg-indigo-700">일정 등록</button>
+        </form>
+        
+        <div class="mt-6">
+          <button id="optimize-button" class="w-full bg-green-500 text-white px-6 py-2 rounded hover:bg-green-600">📈 일정 최적화</button>
+        </div>
+      </section>
+
+      <!-- 메인 컨텐츠 - 일정 목록 -->
+      <section class="lg:col-span-2 bg-white rounded-xl shadow p-6">
+        <div class="flex justify-between items-center mb-4">
+          <h2 class="text-xl font-bold">📋 내 일정</h2>
+        </div>
+        <div id="schedules-container" class="mb-4">
+          <!-- 일정 목록이 여기에 동적으로 로드됩니다 -->
+          <div class="flex justify-center py-5">
+            <div class="animate-spin rounded-full h-10 w-10 border-b-2 border-indigo-600"></div>
+          </div>
+        </div>
+      </section>
+    </div>
+    
+    <!-- 최적화된 일정 섹션 -->
+    <section class="bg-white rounded-xl shadow p-6 mb-6" id="optimized-schedules-section" style="display: none;">
+      <h2 class="text-xl font-bold mb-4">🔍 최적화된 일정</h2>
+      <div id="optimized-schedules-container">
+        <!-- 최적화된 일정이 여기에 표시됩니다 -->
+      </div>
+    </section>
+  </main>
+
+  <!-- 일정 상세 모달 -->
+  <div id="detailModal" class="fixed inset-0 bg-black bg-opacity-50 hidden flex justify-center items-center z-30">
+    <div class="bg-white rounded-xl shadow p-6 w-96">
+      <h3 class="text-lg font-semibold mb-4">📋 일정 상세</h3>
+      <div class="space-y-2 mb-4 text-sm text-gray-700">
+        <p><strong>제목:</strong> <span id="detailTitle"></span></p>
+        <p><strong>시간:</strong> <span id="detailTime"></span></p>
+        <p><strong>설명:</strong> <span id="detailDesc"></span></p>
+        <p><strong>우선순위:</strong> <span id="detailPriority"></span></p>
+        <p><strong>완료 여부:</strong> <span id="detailCompleted"></span></p>
+      </div>
+      <div class="flex justify-end gap-2">
+        <button id="completeBtn" class="px-3 py-1 bg-green-500 text-white rounded hover:bg-green-600">완료</button>
+        <button id="deleteBtn" class="px-3 py-1 bg-red-500 text-white rounded hover:bg-red-600">삭제</button>
+        <button id="closeDetailBtn" class="px-3 py-1 bg-gray-300 rounded hover:bg-gray-400">닫기</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+  <script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/ko.js"></script>
+  <script src="/static/js/main.js"></script>
+  <script src="/static/js/common.js"></script>
+  <script>
+    // 인증 확인
+    document.addEventListener('DOMContentLoaded', function() {
+      if (!getToken()) {
+        window.location.href = '/login';
+        return;
+      }
+      
+      // 캘린더 초기화
+      initCalendar();
+      
+      // 날짜/시간 선택기 초기화
+      flatpickr("#schedule-start-time", {
+        enableTime: true,
+        dateFormat: "Y-m-d H:i",
+        locale: "ko"
+      });
+      
+      flatpickr("#schedule-end-time", {
+        enableTime: true,
+        dateFormat: "Y-m-d H:i",
+        locale: "ko"
+      });
+      
+      // 일정 목록 로드
+      loadSchedules();
+      
+      // 일정 저장 버튼 이벤트
+      document.getElementById('save-schedule-button').addEventListener('click', saveSchedule);
+      
+      // 일정 최적화 버튼 이벤트
+      document.getElementById('optimize-button').addEventListener('click', optimizeSchedules);
+      
+      // 로그아웃 링크 이벤트
+      document.getElementById('logout-link').addEventListener('click', function(e) {
+        e.preventDefault();
+        localStorage.removeItem('token');
+        window.location.href = '/login';
+      });
+      
+      // 모달 닫기 버튼
+      document.getElementById('closeDetailBtn').addEventListener('click', function() {
+        document.getElementById('detailModal').classList.add('hidden');
+      });
+      
+      // 일정 삭제 버튼
+      document.getElementById('deleteBtn').addEventListener('click', function() {
+        const scheduleId = this.dataset.id;
+        if (confirm('정말 이 일정을 삭제하시겠습니까?')) {
+          deleteSchedule(scheduleId);
+        }
+      });
+      
+      // 일정 완료 버튼
+      document.getElementById('completeBtn').addEventListener('click', function() {
+        const scheduleId = this.dataset.id;
+        toggleScheduleComplete(scheduleId, true);
+      });
+    });
+    
+    // 캘린더 초기화 함수
+    function initCalendar() {
+      const calendarEl = document.getElementById('calendar');
+      const calendar = new FullCalendar.Calendar(calendarEl, {
+        initialView: 'dayGridMonth',
+        headerToolbar: {
+          left: 'prev,next today',
+          center: 'title',
+          right: 'dayGridMonth,timeGridWeek,timeGridDay'
+        },
+        locale: 'ko',
+        height: 500,
+        events: function(fetchInfo, successCallback, failureCallback) {
+          // 서버에서 일정 데이터 가져오기
+          fetchAPI('/api/schedules')
+            .then(schedules => {
+              const events = schedules.map(schedule => {
+                return {
+                  id: schedule.id,
+                  title: schedule.title,
+                  start: schedule.start_time,
+                  end: schedule.end_time,
+                  description: schedule.description,
+                  priority: schedule.priority,
+                  is_completed: schedule.is_completed,
+                  color: getPriorityColor(schedule.priority),
+                  textColor: schedule.is_completed ? '#888888' : '#000000',
+                  className: schedule.is_completed ? 'line-through' : ''
+                };
+              });
+              successCallback(events);
+            })
+            .catch(error => {
+              console.error('일정 로드 오류:', error);
+              failureCallback(error);
+            });
+        },
+        eventClick: function(info) {
+          // 일정 상세 보기
+          document.getElementById('detailTitle').textContent = info.event.title;
+          document.getElementById('detailTime').textContent = new Date(info.event.start).toLocaleString('ko-KR') + 
+                                                            ' - ' + 
+                                                            new Date(info.event.end).toLocaleString('ko-KR');
+          document.getElementById('detailDesc').textContent = info.event.extendedProps.description || '(없음)';
+          document.getElementById('detailPriority').textContent = info.event.extendedProps.priority;
+          document.getElementById('detailCompleted').textContent = info.event.extendedProps.is_completed ? '완료' : '미완료';
+          
+          // 수정 및 삭제 버튼에 이벤트 ID 설정
+          document.getElementById('completeBtn').dataset.id = info.event.id;
+          document.getElementById('deleteBtn').dataset.id = info.event.id;
+          
+          // 완료 상태에 따라 완료 버튼 표시 여부
+          document.getElementById('completeBtn').style.display = info.event.extendedProps.is_completed ? 'none' : 'block';
+          
+          // 모달 표시
+          document.getElementById('detailModal').classList.remove('hidden');
+        },
+        dateClick: function(info) {
+          // 날짜 클릭 시 일정 등록 폼에 날짜 설정
+          const clickedDate = new Date(info.date);
+          const formattedDate = clickedDate.toISOString().slice(0, 16);
+          
+          document.getElementById('schedule-start-time').value = formattedDate;
+          
+          // 종료 시간은 시작 시간 + 1시간으로 설정
+          const endDate = new Date(clickedDate.getTime() + 60 * 60 * 1000);
+          document.getElementById('schedule-end-time').value = endDate.toISOString().slice(0, 16);
+          
+          // 일정 등록 폼으로 스크롤
+          document.getElementById('schedule-form').scrollIntoView({ behavior: 'smooth' });
+        }
+      });
+      calendar.render();
+      
+      // 전역 변수로 캘린더 저장 (필요시 다른 함수에서 접근하기 위함)
+      window.calendar = calendar;
+    }
+    
+    // 우선순위에 따른 색상 반환 함수
+    function getPriorityColor(priority) {
+      const colors = {
+        1: '#CCCCCC',  // 회색
+        2: '#63B3ED',  // 파란색
+        3: '#7F9CF5',  // 인디고
+        4: '#F6E05E',  // 노란색
+        5: '#F56565'   // 빨간색
+      };
+      return colors[priority] || '#7F9CF5';
+    }
+    
+    // 우선순위 배지 반환 함수
+    function getPriorityBadge(priority) {
+      const colors = {
+        1: 'bg-gray-200 text-gray-700',
+        2: 'bg-blue-100 text-blue-700',
+        3: 'bg-indigo-100 text-indigo-700',
+        4: 'bg-yellow-100 text-yellow-700',
+        5: 'bg-red-100 text-red-700'
+      };
+      
+      return `<span class="ml-2 text-xs px-2 py-0.5 rounded-full ${colors[priority]}">P${priority}</span>`;
+    }
+    
+    // 일정 목록 로드 함수
+    async function loadSchedules() {
+      try {
+        const schedules = await fetchAPI('/api/schedules');
+        const container = document.getElementById('schedules-container');
+        
+        if (schedules.length === 0) {
+          container.innerHTML = '<div class="text-center py-3">등록된 일정이 없습니다.</div>';
+          return;
+        }
+        
+        let html = '<div class="space-y-2 max-h-[500px] overflow-y-auto pr-2">';
+        
+        // 날짜별로 일정 정렬
+        schedules.sort((a, b) => new Date(a.start_time) - new Date(b.start_time));
+        
+        schedules.forEach(schedule => {
+          const startTime = new Date(schedule.start_time).toLocaleString('ko-KR');
+          const endTime = new Date(schedule.end_time).toLocaleString('ko-KR');
+          const priorityBadge = getPriorityBadge(schedule.priority);
+          const completedClass = schedule.is_completed ? 'line-through' : '';
+          const bgColor = schedule.is_completed ? 'bg-gray-50' : '';
+          
+          html += `
+            <div class="border rounded-lg p-4 flex justify-between items-start hover:bg-gray-50 ${bgColor}">
+              <div>
+                <h5 class="font-semibold ${completedClass}">${schedule.title} ${priorityBadge}</h5>
+                <p class="text-sm text-gray-600">${startTime} - ${endTime}</p>
+                <p class="text-sm text-gray-500">${schedule.description || ''}</p>
+              </div>
+              <div class="flex">
+                <div class="mr-3">
+                  <input class="mr-1" type="checkbox" 
+                    ${schedule.is_completed ? 'checked' : ''} 
+                    onchange="toggleScheduleComplete(${schedule.id}, this.checked)">
+                  <label class="text-sm">완료</label>
+                </div>
+                <button class="text-sm bg-red-100 text-red-600 px-2 py-1 rounded hover:bg-red-200" 
+                  onclick="deleteSchedule(${schedule.id})">삭제</button>
+              </div>
+            </div>
+          `;
+        });
+        
+        html += '</div>';
+        container.innerHTML = html;
+      } catch (error) {
+        console.error('일정 로드 오류:', error);
+        document.getElementById('schedules-container').innerHTML = 
+          '<div class="bg-red-100 text-red-700 p-4 rounded">일정을 불러오는 중 오류가 발생했습니다.</div>';
+      }
+    }
+    
+    // 일정 저장 함수
+    async function saveSchedule() {
+      const title = document.getElementById('schedule-title').value;
+      const description = document.getElementById('schedule-description').value;
+      const startTime = document.getElementById('schedule-start-time').value;
+      const endTime = document.getElementById('schedule-end-time').value;
+      const priority = document.getElementById('schedule-priority').value;
+      
+      if (!title || !startTime || !endTime) {
+        alert('제목과 시간을 모두 입력해주세요.');
+        return;
+      }
+      
+      try {
+        await fetchAPI('/api/schedules', 'POST', {
+          title,
+          description,
+          start_time: new Date(startTime).toISOString(),
+          end_time: new Date(endTime).toISOString(),
+          priority: parseInt(priority)
+        });
+        
+        // 폼 리셋
+        document.getElementById('schedule-form').reset();
+        
+        // 일정 목록 다시 로드
+        loadSchedules();
+        
+        // 캘린더 새로고침
+        window.calendar.refetchEvents();
+        
+        alert('일정이 저장되었습니다.');
+      } catch (error) {
+        alert(error.message || '일정 저장 중 오류가 발생했습니다.');
+      }
+    }
+    
+    // 일정 완료 상태 토글 함수
+    async function toggleScheduleComplete(id, isCompleted) {
+      try {
+        await fetchAPI(`/api/schedules/${id}`, 'PUT', {
+          is_completed: isCompleted
+        });
+        
+        // 일정 목록 다시 로드
+        loadSchedules();
+        
+        // 캘린더 새로고침
+        window.calendar.refetchEvents();
+        
+        // 모달이 열려있으면 닫기
+        document.getElementById('detailModal').classList.add('hidden');
+      } catch (error) {
+        alert(error.message || '일정 상태 변경 중 오류가 발생했습니다.');
+      }
+    }
+    
+    // 일정 삭제 함수
+    async function deleteSchedule(id) {
+      if (!confirm('정말 이 일정을 삭제하시겠습니까?')) {
+        return;
+      }
+      
+      try {
+        await fetchAPI(`/api/schedules/${id}`, 'DELETE');
+        
+        // 일정 목록 다시 로드
+        loadSchedules();
+        
+        // 캘린더 새로고침
+        window.calendar.refetchEvents();
+        
+        // 모달이 열려있으면 닫기
+        document.getElementById('detailModal').classList.add('hidden');
+      } catch (error) {
+        alert(error.message || '일정 삭제 중 오류가 발생했습니다.');
+      }
+    }
+    
+    // 일정 최적화 함수
+    async function optimizeSchedules() {
+      try {
+        document.getElementById('optimize-button').disabled = true;
+        document.getElementById('optimize-button').innerHTML = 
+          '<svg class="animate-spin h-5 w-5 mr-2 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> 최적화 중...';
+        
+        const optimizedSchedules = await fetchAPI('/api/schedules/optimize', 'POST');
+        
+        document.getElementById('optimize-button').disabled = false;
+        document.getElementById('optimize-button').innerHTML = '📈 일정 최적화';
+        
+        // 최적화된 일정 표시
+        displayOptimizedSchedules(optimizedSchedules);
+        
+        // 기존 일정 목록 새로고침
+        loadSchedules();
+        
+        // 캘린더 새로고침
+        window.calendar.refetchEvents();
+      } catch (error) {
+        document.getElementById('optimize-button').disabled = false;
+        document.getElementById('optimize-button').innerHTML = '📈 일정 최적화';
+        alert(error.message || '일정 최적화 중 오류가 발생했습니다.');
+      }
+    }
+    
+    // 최적화된 일정 표시 함수
+    function displayOptimizedSchedules(schedules) {
+      const container = document.getElementById('optimized-schedules-container');
+      const section = document.getElementById('optimized-schedules-section');
+      
+      let html = '<div class="space-y-2">';
+      
+      schedules.forEach(schedule => {
+        const startTime = new Date(schedule.start_time).toLocaleString('ko-KR');
+        const endTime = new Date(schedule.end_time).toLocaleString('ko-KR');
+        const priorityBadge = getPriorityBadge(schedule.priority);
+        
+        html += `
+          <div class="border rounded-lg p-4 hover:bg-gray-50">
+            <h5 class="font-semibold">${schedule.title} ${priorityBadge}</h5>
+            <p class="text-sm text-green-600">최적화됨: ${startTime} - ${endTime}</p>
+            <p class="text-sm text-gray-500">${schedule.description || ''}</p>
+          </div>
+        `;
+      });
+      
+      html += '</div>';
+      container.innerHTML = html;
+      section.style.display = 'block';
+      
+      // 최적화 섹션으로 스크롤
+      section.scrollIntoView({ behavior: 'smooth' });
+    }
+    // dashboard.html의 DOMContentLoaded 이벤트 내부에 추가
+// 저장된 날짜가 있으면 일정 등록 폼에 설정
+const selectedDate = localStorage.getItem('selectedDate');
+if (selectedDate) {
+  document.getElementById('schedule-start-time').value = selectedDate;
+  
+  // 종료 시간은 시작 시간 + 1시간으로 설정
+  const endDate = new Date(new Date(selectedDate).getTime() + 60 * 60 * 1000);
+  document.getElementById('schedule-end-time').value = endDate.toISOString().slice(0, 16);
+  
+  // 사용 후 삭제
+  localStorage.removeItem('selectedDate');
+  
+  // 일정 등록 폼으로 스크롤
+  document.getElementById('schedule-form').scrollIntoView({ behavior: 'smooth' });
+}
+  </script>
+</body>
+</html>
