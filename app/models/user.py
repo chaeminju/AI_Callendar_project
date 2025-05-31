@@ -17,3 +17,7 @@ class User(Base):
     # 관계 설정
     schedules = relationship("Schedule", back_populates="user", cascade="all, delete-orphan")
     goals = relationship("Goal", back_populates="user", cascade="all, delete-orphan")
+
+    #community 추가
+    posts = relationship("CommunityPost", back_populates="author", cascade="all, delete")
+    schedules = relationship("UserSchedule", back_populates="user", cascade="all, delete")

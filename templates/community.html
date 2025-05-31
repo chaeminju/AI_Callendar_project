@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>커뮤니티 페이지</title>
+  <style>
+    body {
+      margin: 0; padding: 0; font-family: Arial, sans-serif;
+      display: flex;
+      height: 100vh;
+    }
+    /* 왼쪽 1/4 영역 */
+    #left-panel {
+      width: 25%;
+      border-right: 1px solid #ccc;
+      display: flex;
+      flex-direction: column;
+    }
+    /* 캘린더 영역 (위쪽 1/3) */
+    #calendar-container {
+      flex: 1 1 33%;
+      padding: 10px;
+      box-sizing: border-box;
+      border-bottom: 1px solid #ccc;
+    }
+    /* 사용자 일정 영역 (아래쪽 2/3) */
+    #user-schedules {
+      flex: 1 1 67%;
+      padding: 10px;
+      box-sizing: border-box;
+      overflow-y: auto;
+    }
+
+    /* 오른쪽 영역 */
+    #right-panel {
+      flex-grow: 1;
+      padding: 20px;
+    }
+
+    /* 일정 리스트 스타일 */
+    .schedule-item {
+      display: flex;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+    .schedule-item input[type="checkbox"] {
+      margin-right: 10px;
+    }
+  </style>
+</head>
+<body>
+
+  <div id="left-panel">
+    <div id="calendar-container">
+      <input type="date" id="date-picker" />
+    </div>
+    <div id="user-schedules">
+      <h3>사용자 일정</h3>
+      <div id="schedule-list">
+        <!-- 일정 리스트가 여기 표시됩니다 -->
+      </div>
+    </div>
+  </div>
+
+  <div id="right-panel">
+    <h1>커뮤니티 주요 내용 영역</h1>
+    <p>필요한 커뮤니티 컨텐츠를 이쪽에 구현하세요.</p>
+  </div>
+
+  <script>
+    const datePicker = document.getElementById("date-picker");
+    const scheduleList = document.getElementById("schedule-list");
+
+    // 기본으로 오늘 날짜 설정
+    const todayStr = new Date().toISOString().slice(0, 10);
+    datePicker.value = todayStr;
+
+    async function fetchSchedules(date) {
+      // FastAPI의 일정 조회 API 경로
+      const response = await fetch(`/api/schedules/by_date/?target_date=${date}`);
+      if (!response.ok) {
+        scheduleList.innerHTML = `<p>일정 조회 중 오류가 발생했습니다.</p>`;
+        return;
+      }
+      const schedules = await response.json();
+      renderSchedules(schedules);
+    }
+
+    function renderSchedules(schedules) {
+      if (schedules.length === 0) {
+        scheduleList.innerHTML = "<p>해당 날짜에 일정이 없습니다.</p>";
+        return;
+      }
+      scheduleList.innerHTML = "";
+      schedules.forEach(schedule => {
+        const div = document.createElement("div");
+        div.className = "schedule-item";
+        const checkbox = document.createElement("input");
+        checkbox.type = "checkbox";
+        checkbox.checked = schedule.completed;
+        checkbox.disabled = true;  // 체크박스 변경 기능은 추후 구현 가능
+        const label = document.createElement("label");
+        label.textContent = schedule.title;
+        div.appendChild(checkbox);
+        div.appendChild(label);
+        scheduleList.appendChild(div);
+      });
+    }
+
+    // 날짜 변경 시 일정 불러오기
+    datePicker.addEventListener("change", () => {
+      fetchSchedules(datePicker.value);
+    });
+
+    // 초기 로드 시 오늘 일정 불러오기
+    fetchSchedules(todayStr);
+  </script>
+
+</body>
+</html>
